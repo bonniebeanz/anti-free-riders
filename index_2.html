@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>共享表格</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --border: rgba(0,0,0,0.1);
+    --border-strong: rgba(0,0,0,0.2);
+    --text: #1a1a1a;
+    --text-muted: #888;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --green: #16a34a;
+    --green-light: #f0fdf4;
+    --red: #dc2626;
+    --radius: 10px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 900px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header-left h1 { font-size: 20px; font-weight: 600; }
+  .header-left p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+  .status-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; }
+  .dot.connected { background: var(--green); }
+
+  /* Add row form */
+  .add-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
+  }
+  .add-form-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-group input:focus { border-color: var(--accent); background: white; }
+
+  .btn-add {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-add:hover { opacity: 0.88; }
+  .btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .row-count { font-size: 13px; color: var(--text-muted); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 10px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--accent-light); }
+  tbody tr.new-row { animation: slideIn 0.3s ease; }
+  td { padding: 11px 16px; font-size: 14px; vertical-align: top; }
+  td.num { color: var(--text-muted); font-size: 12px; width: 40px; }
+  td.time { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+
+  @keyframes slideIn {
+    from { background: #dbeafe; }
+    to { background: transparent; }
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+  }
+  .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--green);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.2s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .star-row { display: flex; align-items: center; gap: 4px; padding: 6px 0; }
+  .star { font-size: 24px; color: #d1d5db; cursor: pointer; transition: color 0.1s, transform 0.1s; line-height: 1; }
+  .star:hover { transform: scale(1.2); }
+  .star-label { font-size: 12px; color: var(--text-muted); margin-left: 6px; }
+
+  /* Firebase notice */
+  .notice {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    font-size: 13px;
+    color: #92400e;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+  }
+  .notice strong { font-weight: 600; }
+  .notice code {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="header-left">
+      <h1>📋 Free Rider Registry</h1>
+      <p>Anyone can add a record — entries cannot be deleted</p>
+    </div>
+    <div class="status-dot">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">连接中...</span>
+    </div>
+  </header>
+
+  <div class="notice" id="setupNotice" style="display:none">
+    <strong>⚙️ 部署前需要配置 Firebase：</strong><br>
+    1. 前往 <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> 免费创建项目<br>
+    2. 创建 Realtime Database，规则设为公开读写（测试模式）<br>
+    3. 将下方代码中的 <code>YOUR_FIREBASE_CONFIG</code> 替换为你的配置信息<br>
+    4. 当前演示使用本地模拟数据，部署后即为真实实时共享
+  </div>
+
+  <div class="add-form">
+    <div class="add-form-title">New Entry</div>
+    <div class="form-grid" id="formGrid">
+      <!-- 动态生成 -->
+    </div>
+    <button class="btn-add" id="addBtn" onclick="addRow()">+ Add Entry</button>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <span style="font-size:14px;font-weight:500">Registry</span>
+      <span class="row-count" id="rowCount">0 条记录</span>
+    </div>
+    <table>
+      <thead>
+        <tr id="tableHead">
+          <!-- 动态生成 -->
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr>
+          <td colspan="10">
+            <div class="empty-state">
+              <div class="icon">📭</div>
+              <p>No entries yet — be the first to add one</p>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">✓ Entry added</div>
+
+<!-- ============================================================
+     Firebase SDK
+     替换下方配置为你自己的 Firebase 项目配置
+     ============================================================ -->
+<script type="module">
+  // ⬇️ 将这里替换为你的 Firebase 配置
+  const firebaseConfig = {
+    apiKey: "AIzaSyBYfm_feB7FXyPJbt6YmFSN-5oWQK9Aaak",
+    authDomain: "anti-free-riders.firebaseapp.com",
+    databaseURL: "https://anti-free-riders-default-rtdb.firebaseio.com",
+    projectId: "anti-free-riders",
+    storageBucket: "anti-free-riders.firebasestorage.app",
+    messagingSenderId: "285622941775",
+    appId: "1:285622941775:web:2ce824d8649e54dd04d23a",
+    measurementId: "G-9WLJPS3RT7"
+  };
+
+  // 表格列定义 — 根据需求自由修改
+  const COLUMNS = [
+    { key: 'freerider',   label: 'Name of Free Rider',    placeholder: 'e.g. John Smith',        required: true  },
+    { key: 'university',  label: 'University',             placeholder: 'e.g. LSE',               required: true  },
+    { key: 'coursecode',  label: 'Course Code',            placeholder: 'e.g. EC1A1',             required: true  },
+    { key: 'date',        label: 'Date of Group Project',  placeholder: 'e.g. 24/03/2025',        required: true, type: 'date' },
+    { key: 'rating',      label: 'Rating (1–5)',           placeholder: '',                       required: true, type: 'rating' },
+    { key: 'description', label: 'Description',            placeholder: 'Describe how this person did not contribute...', required: true, type: 'textarea' },
+  ];
+
+  // ============================================================
+  // 以下为应用逻辑，通常不需要修改
+  // ============================================================
+
+  let rows = [];
+  let db = null;
+  let useLocalMode = false;
+
+  // 构建表头和表单
+  function buildUI() {
+    const head = document.getElementById('tableHead');
+    head.innerHTML = '<th class="num">#</th>' +
+      COLUMNS.map(c => `<th>${c.label}</th>`).join('') +
+      '<th class="time">Submitted</th>';
+
+    const grid = document.getElementById('formGrid');
+    grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(150px, 1fr))';
+    grid.innerHTML = COLUMNS.map(c => {
+      const label = `<label>${c.label}${c.required ? ' <span style="color:#dc2626">*</span>' : ''}</label>`;
+      let input = '';
+      if (c.type === 'rating') {
+        input = `<div class="star-row" id="field_${c.key}" data-value="0">
+          ${[1,2,3,4,5].map(n => `<span class="star" data-val="${n}" onclick="setRating(${n})">&#9733;</span>`).join('')}
+          <span class="star-label" id="star-label">click to rate</span>
+        </div>`;
+      } else if (c.type === 'textarea') {
+        input = `<textarea id="field_${c.key}" placeholder="${c.placeholder}" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:6px;font-size:14px;background:var(--bg);color:var(--text);resize:vertical;font-family:inherit;outline:none;"></textarea>`;
+      } else {
+        input = `<input type="${c.type === 'date' ? 'date' : 'text'}" id="field_${c.key}" placeholder="${c.placeholder}" />`;
+      }
+      const span = c.type === 'textarea' || c.key === 'description' ? 'grid-column: 1 / -1;' : '';
+      return `<div class="form-group" style="${span}">${label}${input}</div>`;
+    }).join('');
+
+    // Enter 键提交
+    grid.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') addRow(); });
+    });
+  }
+
+  // 渲染表格
+  function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    const count = document.getElementById('rowCount');
+    count.textContent = rows.length + (rows.length === 1 ? ' entry' : ' entries');
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${COLUMNS.length + 2}">
+        <div class="empty-state"><div class="icon">📭</div><p>No entries yet — be the first to add one</p></div>
+      </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map((row, i) => {
+      const cells = COLUMNS.map(c => {
+        if (c.type === 'rating') {
+          const val = parseInt(row[c.key]) || 0;
+          const stars = [1,2,3,4,5].map(n =>
+            `<span style="color:${n <= val ? '#f59e0b' : '#d1d5db'};font-size:16px;">&#9733;</span>`
+          ).join('');
+          return `<td>${stars}</td>`;
+        }
+        if (c.type === 'textarea') {
+          return `<td style="max-width:300px;white-space:pre-wrap;word-break:break-word;font-size:13px;color:var(--text-muted)">${escapeHtml(row[c.key] || '—')}</td>`;
+        }
+        return `<td>${escapeHtml(row[c.key] || '—')}</td>`;
+      }).join('');
+      return `<tr class="${row._new ? 'new-row' : ''}">
+        <td class="num">${i + 1}</td>
+        ${cells}
+        <td class="time">${row.time || ''}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // 添加行
+  window.setRating = function(val) {
+    const el = document.getElementById('field_rating');
+    el.dataset.value = val;
+    el.querySelectorAll('.star').forEach(s => {
+      s.style.color = parseInt(s.dataset.val) <= val ? '#f59e0b' : '#d1d5db';
+    });
+    document.getElementById('star-label').textContent = val + ' / 5';
+  };
+
+  window.addRow = function() {
+    const data = {};
+    for (const col of COLUMNS) {
+      if (col.type === 'rating') {
+        data[col.key] = document.getElementById('field_' + col.key).dataset.value || '0';
+      } else {
+        data[col.key] = document.getElementById('field_' + col.key).value.trim();
+      }
+    }
+    for (const col of COLUMNS) {
+      if (col.required && !data[col.key]) {
+        alert('Please fill in: ' + col.label);
+        document.getElementById('field_' + col.key).focus();
+        return;
+      }
+    }
+
+    // Convert date field from yyyy-mm-dd to dd/mm/yyyy
+    if (data.date) {
+      const parts = data.date.split('-');
+      if (parts.length === 3) data.date = parts[2] + '/' + parts[1] + '/' + parts[0];
+    }
+    const now = new Date();
+    data.time = now.toLocaleString('en-GB', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    data.timestamp = now.getTime();
+    data._new = true;
+
+    if (db) {
+      // Firebase 模式
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js').then(({ ref, push }) => {
+        push(ref(db, 'rows'), data);
+      });
+    } else {
+      // 本地演示模式
+      rows.push(data);
+      renderTable();
+      setTimeout(() => { rows[rows.length-1]._new = false; renderTable(); }, 600);
+    }
+
+    // 清空表单
+    COLUMNS.forEach(c => {
+      if (c.type === 'rating') {
+        const el = document.getElementById('field_' + c.key);
+        el.dataset.value = '0';
+        el.querySelectorAll('.star').forEach(s => s.style.color = '#d1d5db');
+        document.getElementById('star-label').textContent = 'click to rate';
+      } else {
+        document.getElementById('field_' + c.key).value = '';
+      }
+    });
+    document.getElementById('field_' + COLUMNS[0].key).focus();
+    showToast();
+  };
+
+  function showToast() {
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // 尝试连接 Firebase
+  async function initFirebase() {
+    if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
+      setStatus(false);
+      useLocalMode = true;
+      return;
+    }
+    try {
+      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+      const { getDatabase, ref, onValue, push } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js');
+      const app = initializeApp(firebaseConfig);
+      db = getDatabase(app);
+      document.getElementById('setupNotice').style.display = 'none';
+      setStatus(true);
+
+      // 实时监听数据
+      onValue(ref(db, 'rows'), snapshot => {
+        const data = snapshot.val();
+        rows = data ? Object.values(data).sort((a,b) => a.timestamp - b.timestamp) : [];
+        renderTable();
+      });
+    } catch(e) {
+      setStatus(false);
+      useLocalMode = true;
+      console.error('Firebase 连接失败:', e);
+    }
+  }
+
+  function setStatus(connected) {
+    document.getElementById('statusDot').className = 'dot' + (connected ? ' connected' : '');
+    document.getElementById('statusText').textContent = connected ? 'Live — synced in real time' : 'Local demo mode';
+  }
+
+  buildUI();
+  renderTable();
+  initFirebase();
+</script>
+</body>
+</html>
